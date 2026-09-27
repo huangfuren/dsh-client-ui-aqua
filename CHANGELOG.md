@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **面向 dsh 0.1.7-rc.2 的图标兼容（防崩溃）**：宿主在 0.1.7 去掉了图标导出的尺寸后缀（`IconCheckOutline16` → `IconCheckOutline`）。此前产物在运行时 `require("@deepseek-ai/dsh-client-ui-primitives")` 后直取 `.IconCheckOutline16`，升级后该键不存在 → 取到 `undefined` 并被 React 当作组件渲染，**卡片直接崩溃**。现改为按可用性选取 `IconCheckOutline ?? IconCheckOutline16`，并在渲染处加存在性守卫。
+- **源码与产物双端同步**：`src/client/AquaPluginCard.tsx` 与 `lib/client.js` 均已修改。产物必须手改——本插件 devDeps 残缺，无法独立构建。
+
 ## v1.0.9
 
 - **通用设置新增「玻璃主题」开关行**，位置在「字号大小」正下方：宿主通用分区按 `priority → order` 数值稳定排序（字号大小 = 11、其它内置行 ≥ 12），所以开关取 **11.4**、下方玻璃参数旋钮取 **11.5**，既紧贴字号又不会和任何内置行抢位置

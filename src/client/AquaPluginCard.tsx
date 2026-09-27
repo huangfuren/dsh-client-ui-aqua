@@ -5,7 +5,15 @@
  * General settings' Appearance row, so the card stays the same shape as the
  * other plugin cards.
  */
-import { IconCheckOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
+
+/**
+ * 宿主图标导出名跨版本有变：dsh <= 0.1.6 提供 `IconCheckOutline16`，
+ * dsh 0.1.7+ 去掉了尺寸后缀，只提供 `IconCheckOutline`。
+ * 这里按可用性选取，避免升级后取出 undefined 并被 React 当作组件渲染而崩溃。
+ */
+const primitiveIcons = uiPrimitives as unknown as Record<string, unknown>
+const CheckIcon = (primitiveIcons.IconCheckOutline ?? primitiveIcons.IconCheckOutline16) as unknown as () => JSX.Element
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the `settings.plugin.item` SlotMap merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
@@ -45,7 +53,7 @@ export function AquaPluginCard(props: AquaPluginCardComponentProps) {
           onClick={() => { setEnabled(!enabled) }}
         >
           <span className={css.check}>
-            {enabled && <IconCheckOutline16 />}
+            {enabled && CheckIcon && <CheckIcon />}
           </span>
           {enabled ? t('aqua.enable') : t('aqua.disable')}
         </button>
