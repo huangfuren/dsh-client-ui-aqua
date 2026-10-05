@@ -1,6 +1,6 @@
 /**
  * Aqua card registered into the Plugins settings section's configurable tab
- * (`settings.plugin.item`): the master on/off switch — name, description, and
+ * (`settings.plugins.tab`): the master on/off switch — name, description, and
  * one toggle, in the section's card language. Every other knob lives in the
  * General settings' Appearance row, so the card stays the same shape as the
  * other plugin cards.
@@ -15,7 +15,7 @@ import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 const primitiveIcons = uiPrimitives as unknown as Record<string, unknown>
 const CheckIcon = (primitiveIcons.IconCheckOutline ?? primitiveIcons.IconCheckOutline16) as unknown as () => JSX.Element
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: pulls the `settings.plugin.item` SlotMap merge.
+// Type-only: pulls the `settings.plugins.tab` SlotMap merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type { createAquaRowStore } from './settings-store.ts'
 import css from './AquaPluginCard.module.css'
@@ -28,7 +28,7 @@ export interface AquaPluginCardInjected {
 
 /** Full component props: runtime share + store share + locale seat + injected face. */
 export type AquaPluginCardComponentProps =
-  PropsRuntime<'settings.plugin.item'> & PropsStore<ReturnType<typeof createAquaRowStore>>
+  PropsRuntime<'settings.plugins.tab'> & PropsStore<ReturnType<typeof createAquaRowStore>>
   & PropsLocale<'settings.aqua'> & InjectFace<AquaPluginCardInjected>
 
 /**

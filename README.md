@@ -12,6 +12,15 @@ Aqua is a highly customizable glassmorphism theme for the DeepSeek Harness web U
 
 ![](assets/4.png)
 
+## Using images from the background plugin
+
+Install [`dsh-bg-plugin`](https://github.com/huangfuren/dsh-bg-plugin) (`@deepseek-ai/dsh-bg` + `@deepseek-ai/dsh-client-bg`) and aqua's wallpaper mode can use that plugin's image library directly: upload or select an image under "Settings → Background", and aqua follows it — no second upload.
+
+- The integration is deliberately **"bg supplies the image, aqua renders it"**. The two packages stay independently switchable: turn the background plugin off and aqua quietly falls back to the fluid backdrop.
+- A wallpaper uploaded inside aqua still wins; clearing it hands the job back upstream.
+- Glass knobs (blur / frost / background brightness) stay in aqua; image management stays in bg — no overlap.
+- Zero new endpoints: aqua reuses bg's existing `/bg-rpc` (read config) and `/bg-file/<id>` (fetch image).
+
 ## Installation
 
 

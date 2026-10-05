@@ -32,6 +32,12 @@ export interface FluidParams {
   color1: string
   color2: string
   color3: string
+  /**
+   * Aqua-only extension (not a site parameter): hue rotation in degrees baked
+   * into the three palette colours. See {@link hueRotate} for why this is done
+   * on the palette instead of with a CSS `filter` on the canvas.
+   */
+  hue?: number
 }
 
 /** The exact default parameter set shipped by the site. */
@@ -199,6 +205,36 @@ function hexToRgb(value: string): [number, number, number] {
   ]
 }
 
+/**
+ * Rotate a palette colour with the CSS `hue-rotate()` matrix.
+ *
+ * The rotation is baked into the three palette colours instead of being applied
+ * as a CSS `filter` on the fluid canvas. A `filter` on a viewport-sized canvas
+ * promotes it to a full-viewport filtered layer, which Chromium rasterises in
+ * low-resolution tiles: the water then shows up as blocky patches with a hard
+ * vertical seam down the middle of the page and washed-out text on top of it.
+ *
+ * Doing it here is exact rather than approximate: `hue-rotate()` is a linear
+ * matrix and the shader's three-colour blend is a linear mix, so rotating each
+ * colour before the blend is the same as filtering the blended output.
+ * @param rgb - colour channels in 0..1.
+ * @param degrees - rotation in degrees (0 leaves the colour untouched).
+ * @returns the rotated channels, clamped to the displayable range like CSS does.
+ */
+function hueRotate(rgb: [number, number, number], degrees: number): [number, number, number] {
+  if (degrees === 0) return rgb
+  const radians = (degrees * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const [r, g, b] = rgb
+  const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value)
+  return [
+    clamp((0.213 + cos * 0.787 - sin * 0.213) * r + (0.715 - cos * 0.715 - sin * 0.715) * g + (0.072 - cos * 0.072 + sin * 0.928) * b),
+    clamp((0.213 - cos * 0.213 + sin * 0.143) * r + (0.715 + cos * 0.285 + sin * 0.140) * g + (0.072 - cos * 0.072 - sin * 0.283) * b),
+    clamp((0.213 - cos * 0.213 - sin * 0.787) * r + (0.715 - cos * 0.715 + sin * 0.715) * g + (0.072 + cos * 0.928 + sin * 0.072) * b),
+  ]
+}
+
 /** Handle returned by {@link attachFluidShader}. */
 export interface FluidShaderHandle {
   /** Update simulation parameters (e.g. a palette switch) without re-mounting. */
@@ -338,23 +374,68 @@ export function attachFluidShader(canvas: HTMLCanvasElement, params: FluidParams
   let flip = false
   let current: FluidParams = { ...params }
   const pointer = { x: 0.5, y: 0.5, smoothX: 0.5, smoothY: 0.5, vx: 0, vy: 0, svx: 0, svy: 0 }
-  const dprCap = Math.min(window.devicePixelRatio || 1, 1.5)
-  width = Math.round(canvas.clientWidth * dprCap)
-  height = Math.round(canvas.clientHeight * dprCap)
-  canvas.width = width
-  canvas.height = height
-  flowWidth = Math.round(width / 4)
-  flowHeight = Math.round(height / 4)
+  const DPR_CAP = 1.5
+  let dprCap = Math.min(window.devicePixelRatio || 1, DPR_CAP)
 
-  const initial = new Uint8Array(flowWidth * flowHeight * 4)
-  for (let i = 0; i < flowWidth * flowHeight; i += 1) {
-    initial[4 * i] = 0
-    initial[4 * i + 1] = 128
-    initial[4 * i + 2] = 128
-    initial[4 * i + 3] = 255
+  /** Neutral flow seed: zero influence (r) and zero direction (gb at 0.5). */
+  const seedFlow = (w: number, h: number): Uint8Array => {
+    const data = new Uint8Array(w * h * 4)
+    for (let i = 0; i < w * h; i += 1) {
+      data[4 * i] = 0
+      data[4 * i + 1] = 128
+      data[4 * i + 2] = 128
+      data[4 * i + 3] = 255
+    }
+    return data
   }
-  let targetA = makeTarget(flowWidth, flowHeight, initial)
-  let targetB = makeTarget(flowWidth, flowHeight, initial)
+
+  let targetA: FlowTarget | undefined
+  let targetB: FlowTarget | undefined
+
+  const dropTargets = (): void => {
+    for (const t of [targetA, targetB]) {
+      if (t === undefined) continue
+      gl.deleteTexture(t.tex)
+      gl.deleteFramebuffer(t.fbo)
+    }
+  }
+
+  /**
+   * (Re)size the display buffer AND the flow field together.
+   *
+   * The flow texture is a quarter-res copy of the display buffer. If it keeps
+   * the size captured at mount time — which is often pre-layout, i.e. 300x150
+   * or even 0x0 —it is magnified across the whole viewport, and every knob it
+   * drives (distortion, swirl, noise boost) turns into visible mosaic blocks
+   * with a hard seam once the canvas buffer grows to the real size.
+   * @returns true when both buffers now hold a usable size.
+   */
+  const resize = (): boolean => {
+    dprCap = Math.min(window.devicePixelRatio || 1, DPR_CAP)
+    const nextWidth = Math.round(canvas.clientWidth * dprCap)
+    const nextHeight = Math.round(canvas.clientHeight * dprCap)
+    const settled = nextWidth !== width || nextHeight !== height || width <= 0 || height <= 0
+    if (!settled) return true
+    width = nextWidth
+    height = nextHeight
+    if (width <= 0 || height <= 0) return false
+    canvas.width = width
+    canvas.height = height
+    const nextFlowWidth = Math.max(1, Math.round(width / 4))
+    const nextFlowHeight = Math.max(1, Math.round(height / 4))
+    if (targetA === undefined || targetB === undefined
+      || nextFlowWidth !== flowWidth || nextFlowHeight !== flowHeight) {
+      flowWidth = nextFlowWidth
+      flowHeight = nextFlowHeight
+      dropTargets()
+      const initial = seedFlow(flowWidth, flowHeight)
+      targetA = makeTarget(flowWidth, flowHeight, initial)
+      targetB = makeTarget(flowWidth, flowHeight, initial)
+    }
+    return true
+  }
+
+  resize()
 
   // Site policy: touch devices and Windows skip the mouse feed entirely.
   const coarse = window.matchMedia('(hover: none), (pointer: coarse)').matches
@@ -379,15 +460,11 @@ export function attachFluidShader(canvas: HTMLCanvasElement, params: FluidParams
     if (now - previous < step) return
     previous = now - ((now - previous) % step)
 
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
-    const nextWidth = Math.round(canvas.clientWidth * ratio)
-    const nextHeight = Math.round(canvas.clientHeight * ratio)
-    if (nextWidth !== width || nextHeight !== height) {
-      width = nextWidth
-      height = nextHeight
-      canvas.width = width
-      canvas.height = height
-    }
+    // Keep the flow field in lockstep with the display buffer; a stale,
+    // quarter-res flowmap magnified across the viewport is what produced the
+    // mosaic half-screen with a hard centre seam. Also retries a mount-time
+    // measurement that landed before layout (canvas.clientWidth === 0).
+    if (!resize()) return
 
     const p = current
     const s = pointer
@@ -427,14 +504,20 @@ export function attachFluidShader(canvas: HTMLCanvasElement, params: FluidParams
     gl.uniform1i(display.flowmap, 0)
     const time = (performance.now() - start) * 0.001 * (p.speed / 100)
     gl.uniform1f(display.time, time)
-    gl.uniform1f(display.pixelRatio, window.devicePixelRatio || 1)
+    // The display buffer is built at `dprCap`, so the shader must divide by the
+    // SAME capped ratio — passing the raw devicePixelRatio made the fluid
+    // pattern drift in scale on any zoom above the cap (>1.5).
+    gl.uniform1f(display.pixelRatio, dprCap)
     gl.uniform2f(display.resolution, width, height)
     gl.uniform1f(display.scale, p.scale)
     gl.uniform1f(display.rotation, p.rotation / 90)
     gl.uniform2f(display.offset, p.offsetX / 100, p.offsetY / 100)
-    const c1 = hexToRgb(p.color1 || '#2E58A4')
-    const c2 = hexToRgb(p.color2 || '#D2E2EE')
-    const c3 = hexToRgb(p.color3 || '#FFFFFF')
+    // Hue lives in the palette, never in a CSS filter on the canvas (see
+    // hueRotate): a filtered viewport-sized layer comes out tiled and blocky.
+    const hue = p.hue ?? 0
+    const c1 = hueRotate(hexToRgb(p.color1 || '#2E58A4'), hue)
+    const c2 = hueRotate(hexToRgb(p.color2 || '#D2E2EE'), hue)
+    const c3 = hueRotate(hexToRgb(p.color3 || '#FFFFFF'), hue)
     gl.uniform4f(display.color1, c1[0], c1[1], c1[2], 1)
     gl.uniform4f(display.color2, c2[0], c2[1], c2[2], 1)
     gl.uniform4f(display.color3, c3[0], c3[1], c3[2], 1)

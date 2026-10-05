@@ -340,6 +340,34 @@ function writeWallpaper(value: string): void {
   }
 }
 
+/**
+ * 背景插件（@deepseek-ai/dsh-bg）当前启用的图片。
+ *
+ * 融合取向：aqua 只做「呈现层」，图片上游交给 bg 的磁盘图库（`$DSH_HOME/background`）。
+ * 这样不必再把整张图塞进 localStorage 的 data URL（配额有限、换浏览器即失、两套图库
+ * 各自为政），也不必为融合新增任何路由 —— bg 已经提供 `/bg-rpc {op:'load'}` 与
+ * `/bg-file/<id>`。返回空串表示 bg 未安装 / 未启用 / 没选中图片，此时 aqua 保持流体背景。
+ */
+async function fetchBgWallpaper(): Promise<string> {
+  if (typeof fetch !== 'function') return ''
+  try {
+    const res = await fetch('/bg-rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'load' }),
+    })
+    if (!res.ok) return ''
+    const payload = await res.json()
+    const cfg = payload?.data
+    if (cfg?.version !== 3 || !cfg.enabled || !cfg.current) return ''
+    const item = Array.isArray(cfg.images) ? cfg.images.find((x) => x?.id === cfg.current) : null
+    if (item === undefined || item === null) return ''
+    return typeof item.url === 'string' && item.url !== '' ? item.url : `/bg-file/${item.id}`
+  } catch {
+    return ''
+  }
+}
+
 /** Fluid palettes: one unified full-screen water. Dark inverts the official
  *  light look with luminous accent cores; light keeps strong blue contrast. */
 const FLUID_PALETTES: Record<'light' | 'dark', FluidParams> = {
@@ -381,6 +409,7 @@ export class AquaLayer {
   private mainFluid: FluidShaderHandle | undefined
   private interactionDisposer: (() => void) | undefined
   private themeListener: (() => void) | undefined
+  private schemeObserver: MutationObserver | undefined
   private seamDisposer: (() => void) | undefined
   private readonly ctx: Context
 
@@ -396,7 +425,9 @@ export class AquaLayer {
           this.sync()
         }
         const key = event.key
-        if (key !== null && (key in NUMERIC_KEYS || key === BACKGROUND_KEY || key === WALLPAPER_KEY || key === MODE_KEY)) {
+        // `key` is a localStorage name, so the numeric knobs must be matched by
+        // VALUE — `key in NUMERIC_KEYS` tests the setting names and is always false.
+        if (key !== null && (Object.values(NUMERIC_KEYS).some((k) => k === key) || key === BACKGROUND_KEY || key === WALLPAPER_KEY || key === MODE_KEY)) {
           this.reloadSettings()
           if (this.enabled) { this.applySettings(); this.applyTokens() }
         }
@@ -412,10 +443,23 @@ export class AquaLayer {
           this.applyFluidPalettes()
         }
       })
+      // Belt and braces for the same scheme: the presenter stamps
+      // `data-ds-dark-theme` on <body> when the theme resolves, which can land
+      // *after* this layer mounted (and without a `theme/change`). Watching the
+      // attribute keeps the fluid palette from freezing in the other scheme.
+      this.schemeObserver = new MutationObserver(() => {
+        const dark = this.resolveScheme()
+        if (dark === this.dark) return
+        this.dark = dark
+        if (this.enabled) this.applySettings()
+      })
+      this.schemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
       return () => {
         window.removeEventListener('storage', onStorage)
         this.themeListener?.()
         this.themeListener = undefined
+        this.schemeObserver?.disconnect()
+        this.schemeObserver = undefined
         this.unmount()
       }
     }, 'ui-aqua: layer lifecycle')
@@ -522,6 +566,7 @@ export class AquaLayer {
     this.settings.background = value
     writeBackground(value)
     if (this.enabled) this.applySettings()
+    if (value === 'wallpaper') void this.refreshBgWallpaper()
   }
 
   /** Set the wallpaper image (a data URL; empty clears it). */
@@ -529,6 +574,8 @@ export class AquaLayer {
     this.settings.wallpaper = value
     writeWallpaper(value)
     if (this.enabled) this.applySettings()
+    // 清空本地壁纸 = 交还上游，回落到 bg 图库当前选中的那张
+    if (value === '') void this.refreshBgWallpaper()
   }
 
   /** Set the wallpaper blur radius (px). */
@@ -549,6 +596,20 @@ export class AquaLayer {
     if (this.enabled) this.applySettings()
   }
 
+  /**
+   * bg 提供的壁纸 URL。刻意不落 localStorage：它是派生状态（bg 那边随时可能换图），
+   * 存下来就变成了一份会过期的副本。空串 = 没有上游，壁纸层保持空。
+   */
+  private bgWallpaper = ''
+
+  /** 取一次 bg 当前图并重绘。任何失败都静默 —— 壁纸回落成流体，不影响其它能力。 */
+  private async refreshBgWallpaper(): Promise<void> {
+    const next = await fetchBgWallpaper()
+    if (next === this.bgWallpaper) return
+    this.bgWallpaper = next
+    if (this.enabled) this.applySettings()
+  }
+
   private sync(): void {
     if (this.enabled) this.mount()
     else this.unmount()
@@ -556,6 +617,9 @@ export class AquaLayer {
 
   /** Write the knob-driven CSS variables and mode attributes onto <html>. */
   private applySettings(): void {
+    // The fluid hue is carried by the shader palette, so every appearance
+    // change has to reach the live shader as well (a CSS variable cannot).
+    this.applyFluidPalettes()
     const style = document.documentElement.style
     style.setProperty('--dsh-aqua-blur', `${this.settings.blur}px`)
     // Frost 0-100 → a 0-1.4 alpha multiplier (50 = 1x). Capped so max frost
@@ -563,7 +627,10 @@ export class AquaLayer {
     // opaque slab (the dark card would otherwise hit 100% and read as solid
     // navy).
     style.setProperty('--dsh-aqua-frost', String(Math.min(this.settings.frost / 50, 1.4)))
-    style.setProperty('--dsh-aqua-fluid-hue', `${this.settings.fluidHue}deg`)
+    // NOTE: no --dsh-aqua-fluid-hue here. The fluid hue is applied inside the
+    // shader palette; writing it as a CSS variable only invited a `filter:
+    // hue-rotate()` on the viewport-sized canvas, which Chromium paints as
+    // low-resolution tiles (blocky water + a hard centre seam).
     style.setProperty('--dsh-aqua-wallpaper-blur', `${this.settings.wallpaperBlur}px`)
     style.setProperty('--dsh-aqua-wallpaper-frost', String(this.settings.wallpaperFrost / 100))
     // Background brightness: dark mode darkens (0 = pure black, 50 = off),
@@ -584,8 +651,10 @@ export class AquaLayer {
     if (ambient !== null) ambient.dataset.background = this.settings.background
     const img = document.querySelector<HTMLImageElement>('[data-dsh-aqua-wallpaper-img]')
     if (img !== null) {
-      if (this.settings.background === 'wallpaper' && this.settings.wallpaper !== '') {
-        img.src = this.settings.wallpaper
+      // 本地上传的 data URL 优先；没有就用在途的 bg 图库当前图（融合点）。
+      const wallpaper = this.settings.wallpaper !== '' ? this.settings.wallpaper : this.bgWallpaper
+      if (this.settings.background === 'wallpaper' && wallpaper !== '') {
+        img.src = wallpaper
       } else {
         img.removeAttribute('src')
       }
@@ -605,6 +674,10 @@ export class AquaLayer {
     document.documentElement.setAttribute(AQUA_ATTRIBUTE, '')
     ensureAmbientScene()
     this.applySettings()
+    // 壁纸上游（bg 图库）是异步的：先按现状绘制，取回后再重绘一次。
+    if (this.settings.background === 'wallpaper' && this.settings.wallpaper === '') {
+      void this.refreshBgWallpaper()
+    }
     this.applyTokens()
     this.mountFluid()
     this.startSeamStamper()
@@ -651,7 +724,12 @@ export class AquaLayer {
   }
 
   private fluidParams(): FluidParams {
-    return FLUID_PALETTES[activeScheme()]
+    // The hue knob rides the palette rather than a CSS filter so the water is
+    // never painted through a filtered viewport-sized layer (see hueRotate).
+    // The scheme comes from the resolved theme (`this.dark`), NOT from
+    // `activeScheme()`: the <body> attribute is stamped after this layer mounts,
+    // and reading it there froze the palette in the wrong scheme.
+    return { ...FLUID_PALETTES[this.dark ? 'dark' : 'light'], hue: this.settings.fluidHue }
   }
 
   private applyFluidPalettes(): void {

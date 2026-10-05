@@ -2,7 +2,7 @@
  * Aqua client plugin body: the toggleable glassmorphism skin. Owns the durable
  * enable flag (localStorage), applies/retracts the theme layer through
  * {@link AquaLayer}, and registers three settings surfaces:
- * - the master on/off card into the Plugins section (`settings.plugin.item`,
+ * - the master on/off card into the Plugins section (`settings.plugins.tab`,
  *   same shape as the other plugin cards);
  * - a compact enable toggle into the General section (`settings.general.item`,
  *   order 11.4, right under the built-in 字号大小 row which sits at 11);
@@ -19,7 +19,7 @@
 // dsh 0.1.5 移除 @deepseek-ai/dsh-client-runtime；客户端 Context 即 Cordis 的 Context。
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: pulls the `settings.plugin.item` SlotMap merge.
+// Type-only: pulls the `settings.plugins.tab` SlotMap merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 // Type-only: pulls the `settings.general.item` SlotMap merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -147,8 +147,10 @@ export function apply(ctx: ClientContext): void {
   }
 
   // Master switch card in the Plugins configurable tab.
-  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item',
+  // dsh 0.2.0: the `settings.plugin.item` slot was removed; the plugins tab is
+  // now `settings.plugins.tab` (see dsh-client-ui-settings-plugins).
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
     id: 'aqua',
     key: NS,
     order: 5,

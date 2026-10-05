@@ -12,6 +12,15 @@ Aqua 是一层高自由度的玻璃质感主题，套在 DeepSeek Harness 网页
 
 ![](assets/4.png)
 
+## 与背景插件联动
+
+装上 [`dsh-bg-plugin`](https://github.com/huangfuren/dsh-bg-plugin)（`@deepseek-ai/dsh-bg` + `@deepseek-ai/dsh-client-bg`）后，aqua 的壁纸可以直接用背景插件的图库：在「设置 → 背景设置」里上传/选中一张图，aqua 的壁纸模式会自动跟着它走，不必再往 aqua 里上传一遍。
+
+- 融合取向是**「bg 出图、aqua 呈现」**，两个包仍可独立开关：关掉背景插件，aqua 安静回落到流体背景。
+- aqua 自己上传的壁纸优先级更高；清空它即交还上游。
+- 玻璃参数（模糊度 / 磨砂度 / 背景亮度）在 aqua 侧调，图片管理在 bg 侧调，各管一段不重叠。
+- 零新增接口：aqua 复用 bg 已有的 `/bg-rpc`（读配置）与 `/bg-file/<id>`（取图）。
+
 ## 安装
 
 

@@ -15,12 +15,14 @@
   background: var(--dsw-alias-bg-base);
 }
 
-/* ---------- Knobs: the settings row writes --dsh-aqua-blur (px),
-   --dsh-aqua-frost (a 0-2 alpha multiplier) and --dsh-aqua-fluid-hue (deg)
-   onto <html>. The glass surfaces below consume them, so the sliders move
-   the whole skin live. Shared card recipes keep the four main panes in lock
-   step; the smaller surfaces (stats / bubble / menu / + button) keep their
-   own base alphas and only scale by the same frost multiplier. ---------- */
+/* ---------- Knobs: the settings row writes --dsh-aqua-blur (px) and
+  --dsh-aqua-frost (a 0-2 alpha multiplier) onto <html>. The glass surfaces
+  below consume them, so the sliders move the whole skin live. Shared card
+  recipes keep the four main panes in lock step; the smaller surfaces (stats /
+  bubble / menu / + button) keep their own base alphas and only scale by the
+  same frost multiplier. The fluid hue is the one knob that is NOT a CSS
+  variable —it is passed to the shader (see hueRotate in fluid-shader.ts).
+  ---------- */
 [data-dsh-aqua] {
   --dsh-aqua-glass-card-light: linear-gradient(180deg,
     color-mix(in srgb, rgb(255 255 255) calc(50% * var(--dsh-aqua-frost, 1)), transparent),
@@ -118,26 +120,35 @@
     linear-gradient(rgba(0, 0, 0, var(--dsh-aqua-brightness-black, 0)), rgba(0, 0, 0, var(--dsh-aqua-brightness-black, 0)));
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  [data-dsh-aqua] [data-dsh-aqua-ambient] {
-    animation: dsh-aqua-breathe 9s var(--ds-ease-in-out) infinite alternate;
-  }
-}
-
-@keyframes dsh-aqua-breathe {
-  from { opacity: 0.86; }
-  to { opacity: 1; }
-}
+/* NOTE: no opacity animation on the ambient container, ever. It is
+   viewport-sized AND wraps the fluid canvas, so animating its opacity forces
+   the whole subtree into a per-frame-rasterised transparency group. Chromium
+   then serves that group with LOW-RESOLUTION TILES: the water is painted as
+   blocky mosaic with a hard vertical seam down the middle of the page, and the
+   text on top of it reads washed out. Because the old breathe animation was
+   `infinite`, the artefact never went away.
+   A "breathing" look belongs on a sibling overlay that does NOT wrap the
+   canvas (see the [data-dsh-aqua-veil] rules below), or in the shader. */
 
 /* Fluid board canvas: the ported deepseek.com shader fills the whole
-   backdrop —one unified water under every column. */
+   backdrop —one unified water under every column.
+   NOTE: no `filter` here. A CSS filter on a viewport-sized canvas makes
+   Chromium rasterise a full-viewport filtered layer in low-resolution tiles,
+   which paints the water as blocky patches with a hard vertical seam down the
+   middle of the page and washes out the text on top of it. The fluid-color
+   knob is baked into the shader palette instead (see hueRotate). */
+/* Own compositing layer. Every glass surface in this theme (sidebar, header,
+   composer, bubbles, menus) uses `backdrop-filter`, and Chromium degrades a
+   backdrop to a LOW-RES tile whenever the backdrop subtree is repainted. The
+   ambient layer is repainted every frame, so the board has to live on its own
+   layer: then only the canvas texture is redrawn and the backdrop stays put. */
 [data-dsh-aqua] [data-dsh-aqua-fluid-canvas] {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  /* The fluid-color knob: hue-shifts the whole water board in place. */
-  filter: hue-rotate(var(--dsh-aqua-fluid-hue, 0deg));
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Custom wallpaper: the backdrop-source knob swaps the fluid board for an
@@ -154,6 +165,7 @@
   height: 100%;
   object-fit: cover;
   filter: blur(var(--dsh-aqua-wallpaper-blur, 0px));
+  transform: translateZ(0);
 }
 
 /* Frost veil over the wallpaper (white in light, near-black in dark). */
@@ -189,10 +201,15 @@ body[data-dsh-bg] [data-dsh-aqua-ambient] [data-dsh-aqua-wallpaper] {
 
 /* Marine life: brand-fish silhouettes, shrimp, bubbles, plankton. Positions,
    sizes, and per-critter timing arrive inline from the plugin markup. */
+/* Marine life: each critter animates forever. Without its own layer every
+   critter frame dirties the whole ambient layer, which is the backdrop of
+   every `backdrop-filter` surface in the UI — that is what turned the chat
+   area into a low-res mosaic. */
 [data-dsh-aqua] [data-aqua-critter] {
   position: absolute;
   color: #7ea4df;
   opacity: 0.22;
+  will-change: transform, opacity;
 }
 
 [data-dsh-aqua] [data-aqua-critter='fish'] {
@@ -423,6 +440,37 @@ body[data-dsh-bg] [data-dsh-aqua-ambient] [data-dsh-aqua-wallpaper] {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 6px 24px rgba(2, 6, 14, 0.22);
+}
+
+/* ---------- Right-hand tab pane: the sidebar's twin. 0.1.7-rc.2 renamed
+   `detailsCol` to `panelBody`, so this column never picked up the glass and
+   kept its own opaque fill (rgb(12 18 27)) — a hard 20-30 level step against
+   the glassy middle. Paint the same card, and let the empty-state host go
+   transparent so the fluid board shows through. Fill only: no backdrop blur
+   (a fresh blur layer over a per-frame canvas is exactly what the mosaic was)
+   and no box-model change, so nothing reflows. ---------- */
+[data-dsh-float] [class*='panelBody'] {
+  margin: 12px;
+  padding: 10px 12px 14px;
+  border: 1px solid rgba(19, 45, 83, 0.26);
+  border-radius: 20px;
+  background: var(--dsh-aqua-glass-card-light);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 28px rgba(19, 45, 83, 0.1);
+  overflow: hidden;
+}
+
+[data-dsh-float] body[data-ds-dark-theme] [class*='panelBody'] {
+  border-color: rgba(148, 180, 220, 0.32);
+  background: var(--dsh-aqua-glass-card-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 6px 24px rgba(2, 6, 14, 0.22);
+}
+
+[data-dsh-float] [class*='emptyTabHost'] {
+  background: transparent;
 }
 
 /* Collapsed rail: full-height glass strip, no floating margins. */

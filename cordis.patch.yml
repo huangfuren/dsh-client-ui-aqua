@@ -1,0 +1,9 @@
+# Aqua 是纯客户端插件（host 半只有一个空 apply），但 DSH 的插件安装器要求包声明
+# `dsh.bundle` 才允许安装：桌面版「添加插件」对没有 dsh.bundle 的包直接拒绝
+# （not-a-bundle，见 dsh-plugin-manager）。没有这份自插声明，aqua 只能靠手改
+# profile 的 cordis.patch.yml 才能加载。
+#
+# 范式与 dsh-conversation / dsh-localsend 一致：组合包把自己插入加载树。
+- insert:
+    - id: ui-aqua
+      name: '@deepseek-ai/dsh-client-ui-aqua'
