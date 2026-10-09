@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **文档：README 默认语言改为中文。** 语言约定统一为 `README.md`（中文，默认入口）+
+  `README.en.md`（英文），两版顶部互链；原 `README.md`（英文）移至 `README.en.md`，
+  原 `README.zh.md`（中文）并入 `README.md`（内容不变）。`files` 补入两个 README。
+
 ## v1.1.0
 
 - **新增：壁纸可直接用「背景插件」的图库（两个插件融合，取向是"bg 出图、aqua 呈现"）**。壁纸模式下若本地没有上传的图，aqua 会 `POST /bg-rpc {op:'load'}` 读一次背景插件（`@deepseek-ai/dsh-bg`）的配置，取其 `current` 图片的 `/bg-file/<id>` 作为壁纸来源。收益：不必再把整张图塞进 `localStorage` 的 data URL（配额有限、换浏览器即失、两个插件各存一套图）；**零新增路由**（bg 已有 `/bg-rpc` 与 `/bg-file`）。切换时机：aqua 挂载时、切到壁纸模式时、以及清空本地上传壁纸时；bg 未安装/未启用/未选图则安静回落成流体背景。`bgWallpaper` 刻意不落 `localStorage`（派生状态，存下来就是会过期的副本）。本地上传的图仍然优先。

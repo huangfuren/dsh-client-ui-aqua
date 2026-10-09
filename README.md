@@ -1,8 +1,8 @@
 # @deepseek-ai/dsh-client-ui-aqua
 
-English | [中文](README.zh.md)
+中文 | [English](README.en.md)
 
-Aqua is a highly customizable glassmorphism theme for the DeepSeek Harness web UI. The header, sidebar, composer, stats line, and trajectory view all become panes of frosted glass. Two modes are built in: Floating Glass restyles the layout into floating cards, while Compatibility Mode keeps the stock layout untouched and only swaps the material to glass — so other plugins' UI gets the same treatment automatically. Glass blur, frost amount, and the backdrop are all adjustable from the settings card — pick a living fluid or drop in your own wallpaper (with its own blur and frost). Switch it off and the stock UI comes back exactly, with no source changes to DSH itself.
+Aqua 是一层高自由度的玻璃质感主题，套在 DeepSeek Harness 网页端。顶栏、侧边栏、输入框、统计行、轨迹视图都成了磨砂玻璃片。内置两种模式：漂浮玻璃把布局改成悬浮卡片；兼容模式保持原版排版不动，只把材质换成通用玻璃，其他插件的界面也会自动玻璃化。玻璃模糊度、磨砂度、背景（流体或自定义壁纸，壁纸还能单独调模糊和磨砂）全都能在**通用设置 → 外观**里自由调节。关掉开关就回到原生界面，不改 DSH 任何一行源码。
 
 ![](assets/1.png)
 
@@ -12,41 +12,41 @@ Aqua is a highly customizable glassmorphism theme for the DeepSeek Harness web U
 
 ![](assets/4.png)
 
-## Using images from the background plugin
+## 与背景插件联动
 
-Install [`dsh-bg-plugin`](https://github.com/huangfuren/dsh-bg-plugin) (`@deepseek-ai/dsh-bg` + `@deepseek-ai/dsh-client-bg`) and aqua's wallpaper mode can use that plugin's image library directly: upload or select an image under "Settings → Background", and aqua follows it — no second upload.
+装上 [`dsh-bg-plugin`](https://github.com/huangfuren/dsh-bg-plugin)（`@deepseek-ai/dsh-bg` + `@deepseek-ai/dsh-client-bg`）后，aqua 的壁纸可以直接用背景插件的图库：在「设置 → 背景设置」里上传/选中一张图，aqua 的壁纸模式会自动跟着它走，不必再往 aqua 里上传一遍。
 
-- The integration is deliberately **"bg supplies the image, aqua renders it"**. The two packages stay independently switchable: turn the background plugin off and aqua quietly falls back to the fluid backdrop.
-- A wallpaper uploaded inside aqua still wins; clearing it hands the job back upstream.
-- Glass knobs (blur / frost / background brightness) stay in aqua; image management stays in bg — no overlap.
-- Zero new endpoints: aqua reuses bg's existing `/bg-rpc` (read config) and `/bg-file/<id>` (fetch image).
+- 融合取向是**「bg 出图、aqua 呈现」**，两个包仍可独立开关：关掉背景插件，aqua 安静回落到流体背景。
+- aqua 自己上传的壁纸优先级更高；清空它即交还上游。
+- 玻璃参数（模糊度 / 磨砂度 / 背景亮度）在 aqua 侧调，图片管理在 bg 侧调，各管一段不重叠。
+- 零新增接口：aqua 复用 bg 已有的 `/bg-rpc`（读配置）与 `/bg-file/<id>`（取图）。
 
-## Installation
+## 安装
 
 
-### Windows (one command)
+### Windows（一条命令）
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "Invoke-WebRequest 'https://github.com/huangfuren/dsh-client-ui-aqua/raw/main/install.ps1' -OutFile install.ps1; .\install.ps1"
 ```
 
-Installs the **latest release** by default. No git needed — the installer falls back to a plain zip download. It links the plugin into the profile's `node_modules` and registers `ui-aqua` in `cordis.patch.yml` (idempotent — safe to run again). Reload the web UI and it is on.
+默认安装**最新发布版**。不需要装 git，安装器会退回到直接下载 zip。脚本会把插件链接进 profile 的 `node_modules`，并在 `cordis.patch.yml` 里登记 `ui-aqua`（幂等，重复跑不会重复登记）。刷新 Web 界面即可。
 
-Pin a version or track the dev branch:
+指定版本或跟随开发分支：
 
 ```powershell
-.\install.ps1 -Version 'v1.0.1'   # a specific release
-.\install.ps1 -Version 'main'     # the development branch
+.\install.ps1 -Version 'v1.0.1'   # 指定某个发布版
+.\install.ps1 -Version 'main'     # 开发分支
 ```
 
-### macOS / Linux (manual, three steps)
+### macOS / Linux（手动，三步）
 
 ```sh
 git clone --depth 1 --branch v1.0.1 https://github.com/huangfuren/dsh-client-ui-aqua.git
 ln -s "$PWD/dsh-client-ui-aqua" "$DSH_HOME/profiles/node_modules/@deepseek-ai/dsh-client-ui-aqua"
 ```
 
-then append to `$DSH_HOME/profiles/web/cordis.patch.yml`:
+然后往 `$DSH_HOME/profiles/web/cordis.patch.yml` 追加：
 
 ```yaml
 - insert:
@@ -54,6 +54,6 @@ then append to `$DSH_HOME/profiles/web/cordis.patch.yml`:
       name: '@deepseek-ai/dsh-client-ui-aqua'
 ```
 
-Reload the web UI. Aqua is **on by default**; the master switch lives in **Settings → Plugins → Glass theme** (same shape as the other plugin cards), and every other control sits directly under **Settings → General → Appearance** (no title of its own). With the master switch off, the whole control block under Appearance is hidden.
+刷新 Web 界面。Aqua **默认开启**；总开关在 **设置 → 插件 → 玻璃主题**（形状与其他插件卡片一致），其余全部调节在 **设置 → 通用设置 → 外观** 的正下方（无独立标题）。总开关关闭时，外观下方的整块调节自动隐藏。
 
-**v1.0.9:** a dedicated **Glass theme** toggle row is also registered in **Settings → General**, right under the built-in **Font size** row (the General section sorts by numeric `order`: Font size is `11`, so the toggle uses `11.4` and the knob block `11.5` — no collision with any built-in row). It renders as label + pill button + one-line hint, so the theme can be switched on/off without opening the Plugins tab.
+**v1.0.9**：在 **设置 → 通用设置** 里新增一条独立的「玻璃主题」开关行，位置就在内置的**字号大小**下方（通用分区按数值 order 排序：字号大小是 `11`，所以开关取 `11.4`、玻璃参数旋钮取 `11.5`，不与任何内置行冲突）。该行是「标签 + 胶囊开关 + 一句说明」，不用进插件页就能开关主题。
