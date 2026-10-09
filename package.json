@@ -3,7 +3,8 @@
   "description": "Aqua: a highly customizable glassmorphism theme for the Web surface — adjustable blur, frost, fluid or wallpaper backdrop, unified corners, and motion",
   "version": "1.1.0",
   "engines": {
-    "dsh": ">=0.1.5-rc.2 <1.0.0"
+    "node": ">=22.19",
+    "dsh": ">=0.1.5-rc.2 <1.0.0 || >=0.2.0-rc.1 <1.0.0"
   },
   "publishConfig": {
     "access": "public"
