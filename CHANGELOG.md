@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## v1.1.1
 
-- **文档：README 默认语言改为中文。** 语言约定统一为 `README.md`（中文，默认入口）+
-  `README.en.md`（英文），两版顶部互链；原 `README.md`（英文）移至 `README.en.md`，
-  原 `README.zh.md`（中文）并入 `README.md`（内容不变）。`files` 补入两个 README。
+- **移除 invariant 伴生模块（死代码）。** 删除 `src/invariant.ts` 与产物 `lib/invariant.js`，
+  同步去掉 `package.json` 的 `./invariant` 导出、`files` 条目、`@deepseek-ai/dsh-invariants`
+  的 peer 与 dev 声明。理由：dsh `0.2.2-rc.1` 的 asar 里已检索不到 `@deepseek-ai/dsh-invariants`
+  （0 命中），该伴生模块声明的 `inject: ['invariants']` 永远不会被满足，`cordis.patch.yml`
+  也从未插入它 —— 从未参与运行时。删掉后不再对宿主已不存在的包声明 peer，避免宿主做
+  peer 校验时因解析不到该包而告警。
+- **补 `dsh.compatibility.dshReleases` 声明。** 显式列出已验证的宿主版本
+  `0.1.7-rc.2` / `0.2.0-rc.2` / `0.2.1-rc.5` / `0.2.2-rc.1`。该字段供插件市场与兼容性阅读器
+  查看，不参与宿主加载判定（宿主真正强校验的是 `peerDependencies`）。
 
 ## v1.1.0
 
@@ -12,6 +18,10 @@
 - **可被插件安装器安装**：补上 `dsh.bundle.patch` 与根级 `cordis.patch.yml`（自插 `ui-aqua`）。此前本包只有 `dsh.client`，没有组合包声明，DSH 的插件安装器（桌面版「添加插件」/`dsh plugin add`）会以 `not-a-bundle` 直接拒绝；只能靠 `install.ps1` 或手改 profile 才能装。范式与 `dsh-conversation` / `dsh-localsend` 一致。`files` 补上 `cordis.patch.yml`。
 - 版本号补记：v1.0.12 原本只是给上一条留的占位版本号，未发布，直接并入 v1.1.0。
 - **源码与产物双端同步**：`src/client/theme-layer.ts` 与 `lib/client.js` 均已修改（产物必须手改——本插件 devDeps 残缺，无法独立构建）。
+- **文档：README 默认语言改为中文。** 语言约定统一为 `README.md`（中文，默认入口）+
+  `README.en.md`（英文），两版顶部互链；原 `README.md`（英文）移至 `README.en.md`，
+  原 `README.zh.md`（中文）并入 `README.md`（内容不变）。`files` 补入两个 README。
+  （本条原挂在 `Unreleased` 下，但改动 `3e14a1f` 已随本版发布，故归位到此。）
 
 ## v1.0.11
 
